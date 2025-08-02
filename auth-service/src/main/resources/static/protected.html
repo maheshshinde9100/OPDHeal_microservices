@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPDHeal - Protected Resource</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 500px;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+        }
+        .content {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .links {
+            text-align: center;
+            margin-top: 15px;
+        }
+        .links a {
+            color: #4285F4;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+        .links a:hover {
+            text-decoration: underline;
+        }
+        #user-info {
+            margin-top: 20px;
+        }
+        .logout-btn {
+            background-color: #dc3545;
+        }
+        .logout-btn:hover {
+            background-color: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Protected Resource</h2>
+        <div id="auth-status" class="message">Checking authentication...</div>
+        
+        <div id="content" class="content" style="display: none;">
+            <h3>Welcome to the Protected Area</h3>
+            <p>This page is only accessible to authenticated users.</p>
+            
+            <div id="user-info">
+                <h4>User Information</h4>
+                <div id="user-data">Loading...</div>
+            </div>
+            
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <div class="links">
+            <a href="login.html">Login Page</a>
+            <a href="register.html">Register Page</a>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            checkAuthentication();
+        };
+
+        function checkAuthentication() {
+            const token = localStorage.getItem('jwt_token');
+            
+            if (!token) {
+                document.getElementById('auth-status').textContent = 'You are not authenticated. Please login.';
+                document.getElementById('auth-status').className = 'message error';
+                return;
+            }
+
+            // Make a request to a protected endpoint
+            fetch('/api/user/me', {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Authentication failed');
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('auth-status').textContent = 'You are authenticated!';
+                document.getElementById('auth-status').className = 'message success';
+                document.getElementById('content').style.display = 'block';
+                
+                // Display user information
+                const userDataDiv = document.getElementById('user-data');
+                userDataDiv.innerHTML = `
+                    <p><strong>Username:</strong> ${data.username}</p>
+                    <p><strong>Email:</strong> ${data.email}</p>
+                    <p><strong>Role:</strong> ${data.role}</p>
+                `;
+            })
+            .catch(error => {
+                document.getElementById('auth-status').textContent = 'Authentication failed: ' + error.message;
+                document.getElementById('auth-status').className = 'message error';
+                // Clear invalid token
+                localStorage.removeItem('jwt_token');
+            });
+        }
+
+        function logout() {
+            localStorage.removeItem('jwt_token');
+            document.getElementById('auth-status').textContent = 'You have been logged out.';
+            document.getElementById('auth-status').className = 'message';
+            document.getElementById('content').style.display = 'none';
+            
+            // Redirect to login page after a short delay
+            setTimeout(() => {
+                window.location.href = 'login.html';
+            }, 1500);
+        }
+    </script>
+</body>
+</html>

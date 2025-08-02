@@ -12,7 +12,6 @@ public class DoctorService {
 
     @Autowired
     private DoctorRepository repo;
-
    public Doctor getDoctorInfo(String doctorId) {
     return repo.findAll().stream()
         .filter(doctor -> doctor.getDoctorId().equals(doctorId))
@@ -70,5 +69,19 @@ public class DoctorService {
         oldDoctor.setDob(newDoctor.getDob());
 
         return new ResponseEntity<>("Updated Doctor Information..",HttpStatus.OK);
+    }
+
+    //get doctor contact details
+    @GetMapping("/contact/{id}")
+    public ContactResponse getContact(@PathVariable String id){
+       ContactResponse res = new ContactResponse();
+       Doctor doctor = repo.findById(id);
+       if(doctor!=null){
+           res.setMobileNo = doctor.getMobileNo();
+           res.setEmail = doctor.getEmail();
+           res.setCity= doctor.getCity();
+           res.setPinCode= doctor.getPinCode();
+       }
+       return res;
     }
 }

@@ -5,17 +5,26 @@ spring:
   application:
     name: api-gateway
 
+#spring-cloud-gateway-routes  : used to handle routes of the diff. services in microservices based application
   cloud:
     gateway:
       routes:
         - id: user-service
-          uri: lb://USER-SERVICE
+          uri: lb://user-service
           predicates:
             - Path=/user/**
         - id: doctor-service
-          uri: lb://DOCTOR-SERVICE
+          uri: lb://doctor-service
           predicates:
             - Path=/doctor/**
+        - id: appointment-service
+          uri: lb://appointment-service
+          predicates:
+              - Path=/appointment/**
+        - id: patient-service
+          uri: lb://patient-service
+          predicates:
+            - Path=/patient/**
     discovery:
       enabled: true
 

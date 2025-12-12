@@ -1,34 +1,183 @@
 server:
   port: 8080
+  forward-headers-strategy: framework
 
 spring:
   application:
     name: api-gateway
-
-#spring-cloud-gateway-routes  : used to handle routes of the diff. services in microservices based application
+  
+  # No Eureka client configuration
+  # No service discovery
+  
   cloud:
     gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials
+      
       routes:
-        - id: user-service
-          uri: lb://user-service
+        # ==================== USER SERVICE ROUTES ====================
+        - id: user-service-auth
+          uri: ${USER_SERVICE_URL:http://localhost:8081}
           predicates:
-            - Path=/user/**
-        - id: doctor-service
-          uri: lb://doctor-service
+            - Path=/api/auth/**
+            - Method=POST,GET
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: userService
+                fallbackUri: forward:/fallback/user-service
+            
+        - id: user-service-users
+          uri: ${USER_SERVICE_URL:http://localhost:8081}
           predicates:
-            - Path=/doctor/**
+            - Path=/api/users/**, /api/doctors/**, /api/patients/**
+            - Method=GET,PUT,PATCH,DELETE
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: userService
+                fallbackUri: forward:/fallback/user-service
+            # Add JWT validation filter if needed
+            # - name: JwtValidationFilter
+            
+        # ==================== APPOINTMENT SERVICE ROUTES ====================
         - id: appointment-service
-          uri: lb://appointment-service
+          uri: ${APPOINTMENT_SERVICE_URL:http://localhost:8082}
           predicates:
-              - Path=/appointment/**
-        - id: patient-service
-          uri: lb://patient-service
+            - Path=/api/appointments/**, /api/slots/**, /api/payments/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: appointmentService
+                fallbackUri: forward:/fallback/appointment-service
+            - StripPrefix=0
+            
+        # ==================== MEDICAL SERVICE ROUTES ====================
+        - id: medical-service-prescriptions
+          uri: ${MEDICAL_SERVICE_URL:http://localhost:8083}
           predicates:
-            - Path=/patient/**
-    discovery:
-      enabled: true
+            - Path=/api/prescriptions/**, /api/medical-records/**, /api/reports/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: medicalService
+                fallbackUri: forward:/fallback/medical-service
+            - StripPrefix=0
+            
+        # ==================== PUBLIC ROUTES (No Authentication) ====================
+        - id: public-doctors
+          uri: ${USER_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/public/doctors/**, /api/public/availability/**
+            - Method=GET
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: userService
+                fallbackUri: forward:/fallback/user-service
+            
+        # ==================== HEALTH CHECKS ====================
+        - id: user-service-health
+          uri: ${USER_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/actuator/health/user-service
+          filters:
+            - RewritePath=/actuator/health/user-service, /actuator/health
+            
+        - id: appointment-service-health
+          uri: ${APPOINTMENT_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/actuator/health/appointment-service
+          filters:
+            - RewritePath=/actuator/health/appointment-service, /actuator/health
+            
+        - id: medical-service-health
+          uri: ${MEDICAL_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/actuator/health/medical-service
+          filters:
+            - RewritePath=/actuator/health/medical-service, /actuator/health
 
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka
+  # CORS Configuration
+  cors:
+    allowed-origins:
+      - "http://localhost:3000"           # Next.js dev
+      - "https://your-vercel-app.vercel.app" # Production frontend
+      - "${ALLOWED_ORIGINS:http://localhost:3000}"
+    allowed-methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+      - OPTIONS
+    allowed-headers:
+      - "*"
+    allow-credentials: true
+    max-age: 3600
+
+  # Circuit Breaker Configuration (Resilience4J)
+  resilience4j:
+    circuitbreaker:
+      instances:
+        userService:
+          register-health-indicator: true
+          sliding-window-size: 10
+          minimum-number-of-calls: 5
+          permitted-number-of-calls-in-half-open-state: 3
+          automatic-transition-from-open-to-half-open-enabled: true
+          wait-duration-in-open-state: 5s
+          failure-rate-threshold: 50
+          event-consumer-buffer-size: 10
+        appointmentService:
+          register-health-indicator: true
+          sliding-window-size: 10
+          minimum-number-of-calls: 5
+          permitted-number-of-calls-in-half-open-state: 3
+          automatic-transition-from-open-to-half-open-enabled: true
+          wait-duration-in-open-state: 5s
+          failure-rate-threshold: 50
+        medicalService:
+          register-health-indicator: true
+          sliding-window-size: 10
+          minimum-number-of-calls: 5
+          permitted-number-of-calls-in-half-open-state: 3
+          automatic-transition-from-open-to-half-open-enabled: true
+          wait-duration-in-open-state: 5s
+          failure-rate-threshold: 50
+
+  # Actuator Endpoints
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: health,info,metrics,circuitbreakers
+    endpoint:
+      health:
+        show-details: always
+    metrics:
+      export:
+        prometheus:
+          enabled: true
+
+# Logging Configuration
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    reactor.netty: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Gateway-specific properties
+spring.cloud.gateway.httpclient:
+  connect-timeout: 5000
+  response-timeout: 10s
+  pool:
+    type: elastic
+    max-idle-time: 60s
+
+# Environment variables for service URLs (with defaults for local dev)
+USER_SERVICE_URL: http://localhost:8081
+APPOINTMENT_SERVICE_URL: http://localhost:8082
+MEDICAL_SERVICE_URL: http://localhost:8083
+ALLOWED_ORIGINS: http://localhost:3000

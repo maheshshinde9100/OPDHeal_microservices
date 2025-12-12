@@ -1,2 +1,5 @@
 .vscode
 docker-compose.yml
+.idea
+medical-service/src/main/resources/application.properties
+user-service/src/main/resources/application.properties
